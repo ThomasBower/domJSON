@@ -3,3 +3,4 @@ selenium-debug.txt
 npm-debug.txt
 *.txt
 output/
+.idea/

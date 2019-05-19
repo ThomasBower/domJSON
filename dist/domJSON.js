@@ -1,22 +1,8 @@
-(function(root, factory) {
-    if (typeof define === "function" && define.amd) {
-        define(function() {
-            return factory(root);
-        });
-    } else if (typeof exports !== "undefined") {
-        var domJSON = factory(root);
-        if (typeof module !== "undefined" && module.exports) {
-            module.exports = domJSON;
-        }
-        exports = dmoJSON;
-    } else {
-        window.domJSON = factory(root);
-    }
-})(this, function(win) {
+module.exports = function() {
     "use strict";
     var domJSON = {};
     var metadata = {
-        href: win.location.href || null,
+        href: window.location.href || null,
         userAgent: window.navigator && window.navigator.userAgent ? window.navigator.userAgent : null,
         version: "0.1.2"
     };
@@ -31,10 +17,12 @@
         htmlOnly: false,
         metadata: true,
         serialProperties: false,
-        stringify: false
+        stringify: false,
+        allowDangerousElements: false
     };
     var defaultsForToDOM = {
-        noMeta: false
+        noMeta: false,
+        allowDangerousElements: false
     };
     var banned = [ "link", "script" ];
     var required = [ "nodeType", "nodeValue", "tagName" ];
@@ -197,6 +185,11 @@
     var copyJSON = function(node, opts) {
         var copy = {};
         for (var n in node) {
+            try {
+                node[n];
+            } catch (e) {
+                continue;
+            }
             if (typeof node[n] !== "undefined" && typeof node[n] !== "function" && n.charAt(0).toLowerCase() === n.charAt(0)) {
                 if (typeof node[n] !== "object" || node[n] instanceof Array) {
                     if (opts.cull) {
@@ -230,7 +223,7 @@
     var styleJSON = function(node, opts) {
         var style, css = {};
         if (opts.computedStyle && node.style instanceof CSSStyleDeclaration) {
-            style = win.getComputedStyle(node);
+            style = window.getComputedStyle(node);
         } else {
             return null;
         }
@@ -244,9 +237,11 @@
     var toJSON = function(node, opts, depth) {
         var style, kids, kidCount, thisChild, children, copy = copyJSON(node, opts);
         if (node.nodeType === 1) {
-            for (var b in banned) {
-                if (node.tagName.toLowerCase() === banned[b]) {
-                    return null;
+            if (!opts.allowDangerousElements) {
+                for (var b in banned) {
+                    if (node.tagName.toLowerCase() === banned[b]) {
+                        return null;
+                    }
                 }
             }
         } else if (node.nodeType === 3 && !node.nodeValue.trim()) {
@@ -283,7 +278,7 @@
         options.computedStyle = toShorthand(options.computedStyle);
         options.domProperties = toShorthand(options.domProperties);
         options.serialProperties = toShorthand(options.serialProperties);
-        options.absoluteBase = win.location.origin + "/";
+        options.absoluteBase = window.location.origin + "/";
         if (options.serialProperties !== true) {
             if (options.serialProperties instanceof Array && options.serialProperties.length) {
                 if (options.serialProperties[0] === true) {
@@ -373,8 +368,15 @@
             return false;
         }
     };
-    var toDOM = function(obj, parent, doc) {
+    var toDOM = function(obj, parent, doc, opts) {
         if (obj.nodeType) {
+            if (obj.nodeType === 1 && !opts.allowDangerousElements) {
+                for (var b in banned) {
+                    if (obj.tagName.toLowerCase() === banned[b]) {
+                        return false;
+                    }
+                }
+            }
             var node = createNode(obj.nodeType, doc, obj);
             parent.appendChild(node);
         } else {
@@ -399,7 +401,7 @@
         }
         if (obj.childNodes && obj.childNodes.length) {
             for (var c in obj.childNodes) {
-                toDOM(obj.childNodes[c], node, doc);
+                toDOM(obj.childNodes[c], node, doc, opts);
             }
         }
     };
@@ -411,11 +413,11 @@
         options = extend({}, defaultsForToDOM, opts);
         node = document.createDocumentFragment();
         if (options.noMeta) {
-            toDOM(obj, node, node);
+            toDOM(obj, node, node, options);
         } else {
-            toDOM(obj.node, node, node);
+            toDOM(obj.node, node, node, options);
         }
         return node;
     };
     return domJSON;
-});
+}();
